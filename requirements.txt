@@ -1,0 +1,17 @@
+# Core image processing and computer vision
+opencv-python>=4.8.0
+Pillow>=10.0.0
+numpy>=1.24.0
+
+# Audio processing
+pydub>=0.25.1
+
+# Web framework (if using the web interface)
+Flask>=2.3.0
+flask-cors>=4.0.0
+
+# Optional: Testing
+pytest>=7.4.0
+
+# Optional: Better error handling
+colorama>=0.4.6

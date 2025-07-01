@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>South Park Talking Head Animator</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <h1>South Park Talking Head Animator</h1>
+        <p class="subtitle">Create South Park-style animations with two different styles!</p>
+        
+        <div class="upload-section">
+            <div class="upload-box" id="imageUpload">
+                <div class="upload-content">
+                    <svg class="upload-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                        <path d="M3 9a2 2 0 012-2h1.6c.3 0 .6-.1.8-.3l1.1-1.4A2 2 0 0110 4.5h4c.6 0 1.2.3 1.6.8l1 1.4c.3.2.6.3.9.3H19a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/>
+                        <circle cx="12" cy="13" r="3"/>
+                    </svg>
+                    <p>Drop character image here</p>
+                    <p class="file-types">PNG, JPG, JPEG</p>
+                    <input type="file" id="imageInput" accept="image/*" hidden>
+                </div>
+                <img id="imagePreview" class="preview-image" style="display: none;">
+            </div>
+            
+            <div class="upload-box" id="audioUpload">
+                <div class="upload-content">
+                    <svg class="upload-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                        <path d="M9 18V5l12-2v13"/>
+                        <circle cx="6" cy="18" r="3"/>
+                        <circle cx="18" cy="16" r="3"/>
+                    </svg>
+                    <p>Drop audio file here</p>
+                    <p class="file-types">WAV, MP3</p>
+                    <input type="file" id="audioInput" accept="audio/*" hidden>
+                </div>
+                <div id="audioInfo" class="audio-info" style="display: none;">
+                    <p class="audio-name"></p>
+                    <div class="waveform"></div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="controls">
+            <div class="controls-row">
+                <label class="style-selector">
+                    <span>Animation Style:</span>
+                    <select id="styleSelect">
+                        <option value="canadian">Canadian/Flappy (Terrance & Phillip style)</option>
+                        <option value="standard">Standard South Park (Stan/Kyle style)</option>
+                    </select>
+                </label>
+                
+                <button id="processBtn" class="process-btn" disabled>
+                    Create Animation
+                </button>
+                
+                <button id="testBtn" class="test-btn" style="display: none;">
+                    Test Upload
+                </button>
+            </div>
+            
+            <div id="styleInfo" class="style-info">
+                <div id="canadianInfo" class="style-description">
+                    <strong>Canadian/Flappy Style:</strong> Head splits and moves like Terrance & Phillip
+                </div>
+                <div id="standardInfo" class="style-description" style="display: none;">
+                    <strong>Standard Style:</strong> Traditional sprite-based lip-sync like main characters
+                    <div class="mouth-positioning" style="margin-top: 10px;">
+                        <label>
+                            <input type="checkbox" id="manualMouthPos"> 
+                            Manual mouth positioning
+                        </label>
+                        <div id="mouthControls" class="mouth-controls" style="display: none; margin-top: 8px;">
+                            <label>X: <input type="number" id="mouthX" min="0" max="1000" placeholder="auto"></label>
+                            <label>Y: <input type="number" id="mouthY" min="0" max="1000" placeholder="auto"></label>
+                            <small>Tip: Click on your character's mouth in the preview to set coordinates</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div id="progressSection" class="progress-section" style="display: none;">
+            <div class="progress-bar">
+                <div class="progress-fill"></div>
+            </div>
+            <p class="progress-text">Processing...</p>
+        </div>
+        
+        <div id="resultSection" class="result-section" style="display: none;">
+            <h2>Your Animation is Ready!</h2>
+            <video id="resultVideo" controls></video>
+            <button id="downloadBtn" class="download-btn">Download Video</button>
+            <button id="resetBtn" class="reset-btn">Create Another</button>
+        </div>
+    </div>
+    
+    <script src="app.js"></script>
+</body>
+</html>
