@@ -7,7 +7,6 @@ import os
 from PIL import Image
 import numpy as np
 import cv2
-from .facial_landmarks_detector import FacialLandmarksDetector
 
 class MouthSpriteManager:
     def __init__(self, sprites_dir=None):
@@ -27,9 +26,6 @@ class MouthSpriteManager:
             'H': 'southparkWide(A_AH)',  # Use wide for other vowels
             'X': 'southparkClosed(M_B_P)'  # Use closed for silence
         }
-        
-        # Initialize facial landmarks detector
-        self.facial_detector = FacialLandmarksDetector()
         
         # Pre-load all sprites
         self._load_all_sprites()
@@ -168,146 +164,15 @@ class MouthSpriteManager:
         
         return (suggested_width, suggested_height)
     
-    def detect_face_type(self, image_array):
-        """
-        Detect whether the image contains a cartoon or realistic face
-        
-        Returns:
-            'realistic': Photorealistic or semi-realistic face
-            'cartoon': Flat cartoon-style face
-            'unknown': Cannot determine
-        """
-        print("🔍 Detecting face type...")
-        
-        # First, try facial landmarks - if they work well, it's likely realistic
-        if self.facial_detector.is_available():
-            landmark_result = self.facial_detector.detect_mouth(image_array)
-            if landmark_result and landmark_result.get('method') in ['dlib_68_landmarks', 'mediapipe_face_mesh']:
-                print("✅ Strong facial landmark detection suggests realistic face")
-                return 'realistic'
-        
-        # Analyze image characteristics
-        h, w = image_array.shape[:2]
-        
-        # Convert to RGB if needed
-        if image_array.shape[2] == 4:
-            rgb_image = image_array[:, :, :3]
-            alpha = image_array[:, :, 3]
-            mask = alpha > 50
-        else:
-            rgb_image = image_array
-            mask = np.ones((h, w), dtype=bool)
-        
-        # 1. Color complexity analysis
-        # Cartoon faces typically have fewer unique colors
-        masked_pixels = rgb_image[mask]
-        if len(masked_pixels) > 0:
-            # Quantize colors to reduce noise
-            quantized = (masked_pixels // 16) * 16
-            unique_colors = len(np.unique(quantized.reshape(-1, 3), axis=0))
-            color_ratio = unique_colors / len(masked_pixels)
-            
-            print(f"📊 Color complexity: {unique_colors} unique colors, ratio: {color_ratio:.4f}")
-            
-            # Low color variety suggests cartoon
-            if color_ratio < 0.05:  # Less than 5% unique colors
-                cartoon_score = 1
-            else:
-                cartoon_score = 0
-        else:
-            cartoon_score = 0
-        
-        # 2. Edge analysis
-        # Cartoons have stronger, cleaner edges
-        gray = cv2.cvtColor(rgb_image, cv2.COLOR_RGB2GRAY)
-        edges = cv2.Canny(gray, 50, 150)
-        edge_density = np.sum(edges[mask] > 0) / np.sum(mask)
-        
-        print(f"📊 Edge density: {edge_density:.4f}")
-        
-        # High edge density with clean lines suggests cartoon
-        # Adjusted threshold - Stan has 0.0546, Saddam has 0.0659
-        if edge_density > 0.065:  # Lowered from 0.1
-            cartoon_score += 1
-        
-        # 3. Gradient analysis
-        # Realistic faces have more gradual color transitions
-        grad_x = cv2.Sobel(gray, cv2.CV_64F, 1, 0, ksize=3)
-        grad_y = cv2.Sobel(gray, cv2.CV_64F, 0, 1, ksize=3)
-        gradient_magnitude = np.sqrt(grad_x**2 + grad_y**2)
-        
-        # Calculate gradient smoothness
-        gradient_variance = np.var(gradient_magnitude[mask])
-        print(f"📊 Gradient variance: {gradient_variance:.2f}")
-        
-        # Low gradient variance suggests flat coloring (cartoon)
-        # Adjusted threshold based on test results
-        if gradient_variance < 10000:  # Increased from 500
-            cartoon_score += 1
-        
-        # 4. Texture analysis
-        # Use Laplacian to detect texture complexity
-        laplacian = cv2.Laplacian(gray, cv2.CV_64F)
-        texture_complexity = np.std(laplacian[mask])
-        
-        print(f"📊 Texture complexity: {texture_complexity:.2f}")
-        
-        # Low texture complexity suggests cartoon
-        # Adjusted threshold based on test results (Stan=21.9, Saddam=26.36)
-        if texture_complexity < 24:  # Increased from 10
-            cartoon_score += 1
-        
-        # Make final determination
-        print(f"🎯 Cartoon score: {cartoon_score}/4")
-        
-        if cartoon_score >= 3:
-            print("✅ Detected: CARTOON face")
-            return 'cartoon'
-        elif cartoon_score <= 1:
-            print("✅ Detected: REALISTIC face")
-            return 'realistic'
-        else:
-            # Score is 2/4 - need tiebreaker
-            print("❓ Face type uncertain (score 2/4), using tiebreaker...")
-            
-            # Use texture complexity as tiebreaker
-            # Realistic faces tend to have more texture
-            if texture_complexity > 25:
-                print("✅ Tiebreaker: Higher texture suggests REALISTIC face")
-                return 'realistic'
-            else:
-                print("✅ Tiebreaker: Lower texture suggests CARTOON face")
-                return 'cartoon'
-    
     def find_optimal_mouth_position(self, character_image_array, approximate_anchor=None):
         """
-        Find the optimal position for mouth sprite placement using hybrid detection
-        - Uses facial landmarks for realistic faces
-        - Uses head-focused detection for cartoon faces
+        Find the optimal position for mouth sprite placement using head-focused detection
         Returns (x, y) coordinates for sprite center
         """
         if approximate_anchor is not None:
             return approximate_anchor
         
         print("🔍 Analyzing character for optimal mouth placement...")
-        
-        # Detect face type
-        face_type = self.detect_face_type(character_image_array)
-        
-        # Try facial landmarks first for realistic faces
-        if face_type == 'realistic' and self.facial_detector.is_available():
-            print("🎯 Using facial landmarks for realistic face...")
-            landmark_result = self.facial_detector.detect_mouth(character_image_array)
-            
-            if landmark_result:
-                mouth_x, mouth_y = landmark_result['center']
-                print(f"✅ Facial landmarks found mouth at: ({mouth_x}, {mouth_y})")
-                return (mouth_x, mouth_y)
-            else:
-                print("⚠️ Facial landmarks failed, falling back to standard detection")
-        
-        # Use standard detection for cartoon faces or as fallback
-        print(f"🎯 Using standard detection for {face_type} face...")
         
         # Step 1: Detect and isolate the head region
         head_region = self._detect_head_region(character_image_array)
@@ -317,8 +182,7 @@ class MouthSpriteManager:
             return self._fallback_mouth_position(character_image_array)
         
         # Step 2: Find mouth position within the head region
-        # Adjust positioning based on face type
-        head_mouth_x, head_mouth_y = self._find_mouth_in_head(head_region, character_image_array, face_type)
+        head_mouth_x, head_mouth_y = self._find_mouth_in_head(head_region, character_image_array)
         
         print(f"🎯 Final mouth position: ({head_mouth_x}, {head_mouth_y})")
         return (int(head_mouth_x), int(head_mouth_y))
@@ -625,42 +489,20 @@ class MouthSpriteManager:
             print(f"📐 Proportion detection failed: {e}")
             return None
     
-    def _find_mouth_in_head(self, head_region, full_image, face_type='cartoon'):
-        """
-        Find mouth position within the detected head region
-        Adjusts positioning based on face type
-        """
+    def _find_mouth_in_head(self, head_region, full_image):
+        """Find mouth position within the detected head region"""
         head_center_x, head_center_y = head_region['center']
         head_height = head_region['bottom'] - head_region['top']
         
-        # Adjust mouth positioning based on face type
-        if face_type == 'realistic':
-            # For realistic faces, mouth is typically 65-70% down from top of head
-            # This matches Claude's suggestion for realistic faces
-            mouth_percentage = 0.68
-            print(f"📊 Using realistic face positioning: {mouth_percentage * 100}% down")
-        else:
-            # For cartoon faces, mouth is typically 75-78% down from top of head
-            # This works well for South Park style characters
-            mouth_percentage = 0.78
-            print(f"📊 Using cartoon face positioning: {mouth_percentage * 100}% down")
-        
-        mouth_offset_y = int(head_height * mouth_percentage)
+        # Mouth is typically 70-85% down from top of head
+        mouth_offset_y = int(head_height * 0.78)
         mouth_y = head_region['top'] + mouth_offset_y
         
         # Mouth X is usually centered horizontally with the head
         mouth_x = head_center_x
         
-        # Validate position isn't too low (Claude's suggestion)
-        char_height = full_image.shape[0]
-        max_mouth_y = int(char_height * 0.55)  # Not more than 55% down the full character
-        if mouth_y > max_mouth_y:
-            print(f"⚠️ Mouth position too low ({mouth_y}), capping at {max_mouth_y}")
-            mouth_y = max_mouth_y
-        
         print(f"👄 Head-relative mouth position: ({mouth_x}, {mouth_y})")
         print(f"🔍 Head region used: {head_region['method']}")
-        print(f"🎭 Face type: {face_type}")
         
         return mouth_x, mouth_y
     

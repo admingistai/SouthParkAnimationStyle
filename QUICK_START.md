@@ -78,22 +78,6 @@ southpark-animator/
 
 ## 🔧 Advanced Options
 
-### Hybrid Mouth Detection System
-The animator now features an intelligent hybrid mouth detection system:
-
-- **Automatic Face Type Detection**: Distinguishes between cartoon and realistic faces
-- **Facial Landmark Support**: Can use dlib/MediaPipe for accurate mouth detection on realistic faces
-- **Smart Positioning**: 
-  - Cartoon faces: Mouth at 78% down from top of head
-  - Realistic faces: Mouth at 68% down from top of head
-- **Multiple Detection Methods**: Color-based, shape-based, and proportion-based head detection
-
-To enable facial landmark detection for realistic faces:
-```bash
-pip install dlib mediapipe
-# Download shape predictor from http://dlib.net/files/shape_predictor_68_face_landmarks.dat.bz2
-```
-
 ### Manual Mouth Positioning (Standard Style)
 If automatic mouth detection isn't perfect, specify exact coordinates:
 

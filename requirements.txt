@@ -15,7 +15,3 @@ pytest>=7.4.0
 
 # Optional: Better error handling
 colorama>=0.4.6
-
-# Facial landmark detection for realistic faces
-dlib>=19.24.0
-mediapipe>=0.10.0
