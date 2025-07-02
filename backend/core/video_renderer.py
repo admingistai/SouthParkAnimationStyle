@@ -35,6 +35,15 @@ class VideoRenderer:
                 'right': 40
             }
             SCALE_FACTOR = 1.0  # No scaling needed for sprite-based animation
+        elif style == 'nutcracker':
+            # Nutcracker animation needs space for jaw rotation
+            PADDING = {
+                'top': 60,
+                'bottom': 80,   # Extra space for jaw swing
+                'left': 60,
+                'right': 60
+            }
+            SCALE_FACTOR = 0.8  # Slightly scaled down
         else:
             # Canadian flappy-head animation needs more space for movement
             PADDING = {
@@ -77,6 +86,9 @@ class VideoRenderer:
         if style == 'standard':
             # For sprite animation, duration is based on keyframe data
             duration = max(kf.get('start_time', 0) + kf.get('duration', 0.2) for kf in keyframes) if keyframes else 1.0
+        elif style == 'nutcracker':
+            # For nutcracker animation, use time-based keyframes
+            duration = keyframes[-1]['time'] + 0.5 if keyframes else 1.0
         else:
             # For movement animation, use existing logic
             duration = keyframes[-1]['time'] + 0.5 if keyframes else 1.0
@@ -99,6 +111,12 @@ class VideoRenderer:
                 if frame_num % 50 == 0:
                     print(f"Frame {frame_num}/{total_frames}: time={current_time:.2f}s, viseme={viseme_code}")
                 frame = self.render_sprite_frame(character_data, viseme_code, debug=debug_frame)
+            elif style == 'nutcracker':
+                # Nutcracker jaw animation
+                jaw_offset = self.interpolate_jaw_offset(keyframes, current_time)
+                if frame_num % 50 == 0:
+                    print(f"Frame {frame_num}/{total_frames}: time={current_time:.2f}s, jaw_offset={jaw_offset:.1f}px")
+                frame = self.image_processor.composite_frame_with_jaw_slide(character_data, jaw_offset, debug=debug_frame)
             else:
                 # Movement-based animation (Canadian style)
                 movement = self.interpolate_movement(keyframes, current_time)
@@ -182,6 +200,52 @@ class VideoRenderer:
                 break
         
         return current_movement
+    
+    def interpolate_jaw_offset(self, keyframes, time):
+        """Interpolate jaw vertical offset for nutcracker animation with smooth transitions"""
+        if not keyframes:
+            return 0
+        
+        # Find surrounding keyframes
+        prev_kf = None
+        next_kf = None
+        
+        for kf in keyframes:
+            if kf['time'] <= time:
+                prev_kf = kf
+            else:
+                next_kf = kf
+                break
+        
+        # If we only have previous keyframe, use its offset
+        if prev_kf and not next_kf:
+            return prev_kf['jaw_offset_y']
+        
+        # If we only have next keyframe, return closed
+        if not prev_kf and next_kf:
+            return 0
+        
+        # If time is between two keyframes, interpolate smoothly
+        if prev_kf and next_kf:
+            # Calculate interpolation factor
+            time_range = next_kf['time'] - prev_kf['time']
+            if time_range > 0:
+                t = (time - prev_kf['time']) / time_range
+                
+                # Use easing function for smooth transitions
+                # Ease-in-out cubic
+                if t < 0.5:
+                    t = 2 * t * t
+                else:
+                    t = 1 - 2 * (1 - t) * (1 - t)
+                
+                # Interpolate offset
+                offset_diff = next_kf['jaw_offset_y'] - prev_kf['jaw_offset_y']
+                return prev_kf['jaw_offset_y'] + offset_diff * t
+            else:
+                return prev_kf['jaw_offset_y']
+        
+        return 0
     
     def get_current_viseme(self, keyframes, frame_num):
         """Get the current viseme code for sprite-based animation"""

@@ -21,6 +21,20 @@ const manualMouthPos = document.getElementById('manualMouthPos');
 const mouthControls = document.getElementById('mouthControls');
 const mouthX = document.getElementById('mouthX');
 const mouthY = document.getElementById('mouthY');
+const resetMouthPos = document.getElementById('resetMouthPos');
+const positionFeedback = document.getElementById('positionFeedback');
+const mouthMarker = document.getElementById('mouthMarker');
+const imagePreviewContainer = document.querySelector('.image-preview-container');
+const openMouthSelector = document.getElementById('openMouthSelector');
+const mouthSelectorModal = document.getElementById('mouthSelectorModal');
+const closeMouthSelector = document.getElementById('closeMouthSelector');
+const mouthSelectorImage = document.getElementById('mouthSelectorImage');
+const mouthSelectorMarker = document.getElementById('mouthSelectorMarker');
+const currentCoords = document.getElementById('currentCoords');
+const confirmMouthSelection = document.getElementById('confirmMouthSelection');
+const cancelMouthSelection = document.getElementById('cancelMouthSelection');
+const previewMouthSprite = document.getElementById('previewMouthSprite');
+const mouthPreviewCanvas = document.getElementById('mouthPreviewCanvas');
 
 // State
 let selectedImage = null;
@@ -72,6 +86,32 @@ manualMouthPos.addEventListener('change', toggleMouthControls);
 // Click on image to set mouth position
 imagePreview.addEventListener('click', setMouthPosition);
 
+// Reset mouth position button
+resetMouthPos.addEventListener('click', resetMouthPosition);
+
+// Mouth selector modal events
+openMouthSelector.addEventListener('click', openMouthSelectorModal);
+closeMouthSelector.addEventListener('click', closeMouthSelectorModal);
+cancelMouthSelection.addEventListener('click', closeMouthSelectorModal);
+confirmMouthSelection.addEventListener('click', confirmMouthPosition);
+previewMouthSprite.addEventListener('click', previewMouthSpriteAtPosition);
+mouthSelectorImage.addEventListener('click', setMouthPositionInModal);
+
+// Close modal when clicking outside
+mouthSelectorModal.addEventListener('click', (e) => {
+    if (e.target === mouthSelectorModal) {
+        closeMouthSelectorModal();
+    }
+});
+
+// Update mouth marker when coordinates change
+mouthX.addEventListener('input', updateMouthMarkerPosition);
+mouthY.addEventListener('input', updateMouthMarkerPosition);
+
+// Image hover effects for mouth positioning
+imagePreview.addEventListener('mouseenter', handleImageHover);
+imagePreview.addEventListener('mouseleave', handleImageLeave);
+
 // Initialize style info
 updateStyleInfo();
 
@@ -116,9 +156,12 @@ function handleImageFile(file) {
     const reader = new FileReader();
     reader.onload = (e) => {
         imagePreview.src = e.target.result;
-        imagePreview.style.display = 'block';
+        imagePreviewContainer.style.display = 'block';
         imageUpload.querySelector('.upload-content').style.display = 'none';
         imageUpload.classList.add('has-file');
+        
+        // Reset mouth positioning when new image is loaded
+        resetMouthPosition();
     };
     reader.readAsDataURL(file);
     
@@ -151,22 +194,36 @@ function handleAudioFile(file) {
 function updateStyleInfo() {
     const selectedStyle = styleSelect.value;
     
+    // Get nutcracker info element
+    const nutcrackerInfo = document.getElementById('nutcrackerInfo');
+    
+    // Hide all style info divs
+    canadianInfo.style.display = 'none';
+    standardInfo.style.display = 'none';
+    nutcrackerInfo.style.display = 'none';
+    
+    // Show the selected style info
     if (selectedStyle === 'standard') {
-        canadianInfo.style.display = 'none';
         standardInfo.style.display = 'block';
+    } else if (selectedStyle === 'nutcracker') {
+        nutcrackerInfo.style.display = 'block';
     } else {
         canadianInfo.style.display = 'block';
-        standardInfo.style.display = 'none';
     }
 }
 
 function toggleMouthControls() {
     if (manualMouthPos.checked) {
         mouthControls.style.display = 'flex';
+        updateImageInteractivity();
+        updateMouthMarkerPosition();
     } else {
         mouthControls.style.display = 'none';
         mouthX.value = '';
         mouthY.value = '';
+        mouthMarker.style.display = 'none';
+        updateImageInteractivity();
+        clearPositionFeedback();
     }
 }
 
@@ -184,11 +241,15 @@ function setMouthPosition(event) {
     
     console.log(`Mouth position set to: (${x}, ${y})`);
     
-    // Visual feedback
-    imagePreview.style.cursor = 'crosshair';
+    // Update visual marker and feedback
+    updateMouthMarkerPosition();
+    updatePositionFeedback(x, y);
+    
+    // Brief animation for confirmation
+    mouthMarker.classList.add('marker-pulse');
     setTimeout(() => {
-        imagePreview.style.cursor = 'default';
-    }, 1000);
+        mouthMarker.classList.remove('marker-pulse');
+    }, 600);
 }
 
 function checkCanProcess() {
@@ -211,7 +272,7 @@ async function testUpload() {
     const formData = new FormData();
     formData.append('image', selectedImage);
     formData.append('audio', selectedAudio);
-    formData.append('style', 'canadian');
+    formData.append('style', document.getElementById('styleSelect').value);
     
     try {
         const response = await fetch(`${API_URL}/test-upload`, {
@@ -340,7 +401,7 @@ function resetForm() {
     selectedAudio = null;
     currentVideoUrl = null;
     
-    imagePreview.style.display = 'none';
+    imagePreviewContainer.style.display = 'none';
     imageUpload.querySelector('.upload-content').style.display = 'flex';
     imageUpload.classList.remove('has-file');
     
@@ -355,5 +416,227 @@ function resetForm() {
     imageInput.value = '';
     audioInput.value = '';
     
+    // Reset mouth positioning
+    resetMouthPosition();
+    
     checkCanProcess();
+}
+
+// Enhanced mouth positioning functions
+function resetMouthPosition() {
+    mouthX.value = '';
+    mouthY.value = '';
+    mouthMarker.style.display = 'none';
+    clearPositionFeedback();
+    console.log('Mouth position reset to auto-detection');
+}
+
+function updateMouthMarkerPosition() {
+    const x = parseInt(mouthX.value);
+    const y = parseInt(mouthY.value);
+    
+    if (!isNaN(x) && !isNaN(y) && imagePreview.naturalWidth && imagePreview.naturalHeight) {
+        const rect = imagePreview.getBoundingClientRect();
+        const displayX = (x / imagePreview.naturalWidth) * rect.width;
+        const displayY = (y / imagePreview.naturalHeight) * rect.height;
+        
+        mouthMarker.style.left = displayX + 'px';
+        mouthMarker.style.top = displayY + 'px';
+        mouthMarker.style.display = 'block';
+        
+        updatePositionFeedback(x, y);
+    } else {
+        mouthMarker.style.display = 'none';
+        clearPositionFeedback();
+    }
+}
+
+function updatePositionFeedback(x, y) {
+    if (!x || !y) {
+        clearPositionFeedback();
+        return;
+    }
+    
+    // Simple validation feedback
+    const imageWidth = imagePreview.naturalWidth;
+    const imageHeight = imagePreview.naturalHeight;
+    
+    if (x < 0 || x > imageWidth || y < 0 || y > imageHeight) {
+        positionFeedback.innerHTML = '⚠️ Position is outside image bounds';
+        positionFeedback.className = 'position-feedback warning';
+        return;
+    }
+    
+    // Check if position is in likely mouth area (lower 2/3 of image)
+    if (y < imageHeight * 0.33) {
+        positionFeedback.innerHTML = '💡 Tip: Mouth is usually in the lower part of the face';
+        positionFeedback.className = 'position-feedback info';
+    } else if (y > imageHeight * 0.85) {
+        positionFeedback.innerHTML = '💡 Position looks a bit low for a mouth';
+        positionFeedback.className = 'position-feedback info';
+    } else {
+        positionFeedback.innerHTML = '✅ Position looks good!';
+        positionFeedback.className = 'position-feedback success';
+    }
+}
+
+function clearPositionFeedback() {
+    positionFeedback.innerHTML = '';
+    positionFeedback.className = 'position-feedback';
+}
+
+function updateImageInteractivity() {
+    const isInteractive = styleSelect.value === 'standard' && manualMouthPos.checked;
+    
+    if (isInteractive) {
+        imagePreviewContainer.classList.add('interactive');
+        imagePreview.style.cursor = 'crosshair';
+    } else {
+        imagePreviewContainer.classList.remove('interactive');
+        imagePreview.style.cursor = 'default';
+    }
+}
+
+function handleImageHover() {
+    if (styleSelect.value === 'standard' && manualMouthPos.checked) {
+        imagePreviewContainer.classList.add('hover-active');
+    }
+}
+
+function handleImageLeave() {
+    imagePreviewContainer.classList.remove('hover-active');
+}
+
+// Modal mouth selector functionality
+let tempMouthCoordinates = null;
+
+function openMouthSelectorModal() {
+    if (!selectedImage) {
+        alert('Please select an image first');
+        return;
+    }
+    
+    // Set the modal image to the selected image
+    mouthSelectorImage.src = imagePreview.src;
+    
+    // Reset modal state
+    tempMouthCoordinates = null;
+    mouthSelectorMarker.style.display = 'none';
+    confirmMouthSelection.disabled = true;
+    previewMouthSprite.disabled = true;
+    currentCoords.textContent = 'Not set';
+    clearCanvas();
+    
+    // Show modal
+    mouthSelectorModal.style.display = 'flex';
+    
+    console.log('Opened mouth selector modal');
+}
+
+function closeMouthSelectorModal() {
+    mouthSelectorModal.style.display = 'none';
+    tempMouthCoordinates = null;
+    clearCanvas();
+    console.log('Closed mouth selector modal');
+}
+
+function setMouthPositionInModal(event) {
+    const rect = mouthSelectorImage.getBoundingClientRect();
+    const x = Math.round((event.clientX - rect.left) * (mouthSelectorImage.naturalWidth / rect.width));
+    const y = Math.round((event.clientY - rect.top) * (mouthSelectorImage.naturalHeight / rect.height));
+    
+    tempMouthCoordinates = { x, y };
+    
+    // Update marker position
+    const displayX = (x / mouthSelectorImage.naturalWidth) * rect.width;
+    const displayY = (y / mouthSelectorImage.naturalHeight) * rect.height;
+    
+    mouthSelectorMarker.style.left = displayX + 'px';
+    mouthSelectorMarker.style.top = displayY + 'px';
+    mouthSelectorMarker.style.display = 'block';
+    
+    // Update coordinates display
+    currentCoords.textContent = `X: ${x}, Y: ${y}`;
+    
+    // Enable buttons
+    confirmMouthSelection.disabled = false;
+    previewMouthSprite.disabled = false;
+    
+    console.log(`Temporary mouth position set to: (${x}, ${y})`);
+}
+
+function confirmMouthPosition() {
+    if (!tempMouthCoordinates) {
+        return;
+    }
+    
+    // Set the coordinates in the main form
+    mouthX.value = tempMouthCoordinates.x;
+    mouthY.value = tempMouthCoordinates.y;
+    
+    // Update the main form's visual feedback
+    updateMouthMarkerPosition();
+    updatePositionFeedback(tempMouthCoordinates.x, tempMouthCoordinates.y);
+    
+    // Close modal
+    closeMouthSelectorModal();
+    
+    console.log(`Confirmed mouth position: (${tempMouthCoordinates.x}, ${tempMouthCoordinates.y})`);
+}
+
+function previewMouthSpriteAtPosition() {
+    if (!tempMouthCoordinates) {
+        return;
+    }
+    
+    // For now, just draw a simple mouth sprite preview
+    // In a full implementation, you'd load actual mouth sprites
+    drawMouthPreview(tempMouthCoordinates.x, tempMouthCoordinates.y);
+}
+
+function drawMouthPreview(x, y) {
+    const canvas = mouthPreviewCanvas;
+    const ctx = canvas.getContext('2d');
+    const image = mouthSelectorImage;
+    
+    // Set canvas size to match image display size
+    const rect = image.getBoundingClientRect();
+    canvas.width = rect.width;
+    canvas.height = rect.height;
+    canvas.style.width = rect.width + 'px';
+    canvas.style.height = rect.height + 'px';
+    
+    // Clear canvas
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    
+    // Calculate display coordinates
+    const displayX = (x / image.naturalWidth) * rect.width;
+    const displayY = (y / image.naturalHeight) * rect.height;
+    
+    // Draw a simple mouth sprite preview (oval shape)
+    ctx.fillStyle = 'rgba(139, 69, 19, 0.8)'; // Brown color for mouth
+    ctx.strokeStyle = 'rgba(0, 0, 0, 0.8)';
+    ctx.lineWidth = 2;
+    
+    // Draw mouth oval
+    ctx.beginPath();
+    ctx.ellipse(displayX, displayY, 20, 10, 0, 0, 2 * Math.PI);
+    ctx.fill();
+    ctx.stroke();
+    
+    // Draw teeth line
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.9)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(displayX - 15, displayY);
+    ctx.lineTo(displayX + 15, displayY);
+    ctx.stroke();
+    
+    console.log('Drew mouth preview at display coordinates:', displayX, displayY);
+}
+
+function clearCanvas() {
+    const canvas = mouthPreviewCanvas;
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
 }

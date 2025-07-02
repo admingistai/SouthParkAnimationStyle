@@ -22,7 +22,13 @@
                     <p class="file-types">PNG, JPG, JPEG</p>
                     <input type="file" id="imageInput" accept="image/*" hidden>
                 </div>
-                <img id="imagePreview" class="preview-image" style="display: none;">
+                <div class="image-preview-container" style="position: relative; display: none;">
+                    <img id="imagePreview" class="preview-image">
+                    <div id="mouthMarker" class="mouth-marker" style="display: none;">
+                        <div class="marker-crosshair"></div>
+                        <div class="marker-label">Mouth Position</div>
+                    </div>
+                </div>
             </div>
             
             <div class="upload-box" id="audioUpload">
@@ -50,6 +56,7 @@
                     <select id="styleSelect">
                         <option value="canadian">Canadian/Flappy (Terrance & Phillip style)</option>
                         <option value="standard">Standard South Park (Stan/Kyle style)</option>
+                        <option value="nutcracker">Nutcracker/Jaw Drop (Ventriloquist style)</option>
                     </select>
                 </label>
                 
@@ -74,11 +81,21 @@
                             Manual mouth positioning
                         </label>
                         <div id="mouthControls" class="mouth-controls" style="display: none; margin-top: 8px;">
-                            <label>X: <input type="number" id="mouthX" min="0" max="1000" placeholder="auto"></label>
-                            <label>Y: <input type="number" id="mouthY" min="0" max="1000" placeholder="auto"></label>
-                            <small>Tip: Click on your character's mouth in the preview to set coordinates</small>
+                            <div class="coordinate-inputs">
+                                <label>X: <input type="number" id="mouthX" min="0" max="1000" placeholder="auto" readonly></label>
+                                <label>Y: <input type="number" id="mouthY" min="0" max="1000" placeholder="auto" readonly></label>
+                                <button type="button" id="openMouthSelector" class="select-mouth-btn">Select Mouth Position</button>
+                                <button type="button" id="resetMouthPos" class="reset-mouth-btn">Reset to Auto</button>
+                            </div>
+                            <div class="mouth-position-feedback">
+                                <div id="positionFeedback" class="position-feedback"></div>
+                                <small>💡 Click "Select Mouth Position" to open the positioning tool</small>
+                            </div>
                         </div>
                     </div>
+                </div>
+                <div id="nutcrackerInfo" class="style-description" style="display: none;">
+                    <strong>Nutcracker Style:</strong> Lower jaw drops down like a ventriloquist dummy based on audio volume
                 </div>
             </div>
         </div>
@@ -95,6 +112,39 @@
             <video id="resultVideo" controls></video>
             <button id="downloadBtn" class="download-btn">Download Video</button>
             <button id="resetBtn" class="reset-btn">Create Another</button>
+        </div>
+    </div>
+    
+    <!-- Mouth Position Selection Modal -->
+    <div id="mouthSelectorModal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Select Mouth Position</h3>
+                <button type="button" id="closeMouthSelector" class="close-btn">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="mouth-selector-container">
+                    <div class="selector-instructions">
+                        <p>Click on your character's mouth to set the position for lip-sync animation.</p>
+                        <div class="current-position">
+                            <span>Position: </span>
+                            <span id="currentCoords">Not set</span>
+                        </div>
+                    </div>
+                    <div class="image-selector-container">
+                        <img id="mouthSelectorImage" class="selector-image">
+                        <div id="mouthSelectorMarker" class="mouth-selector-marker" style="display: none;">
+                            <div class="selector-crosshair"></div>
+                        </div>
+                        <canvas id="mouthPreviewCanvas" class="mouth-preview-canvas"></canvas>
+                    </div>
+                    <div class="selector-controls">
+                        <button type="button" id="confirmMouthSelection" class="confirm-btn" disabled>Confirm Position</button>
+                        <button type="button" id="cancelMouthSelection" class="cancel-btn">Cancel</button>
+                        <button type="button" id="previewMouthSprite" class="preview-btn" disabled>Preview Mouth Sprite</button>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
     

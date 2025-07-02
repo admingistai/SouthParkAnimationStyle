@@ -79,6 +79,150 @@ class ImageProcessor:
         
         return result
     
+    def split_character_nutcracker(self, image_path, mouth_anchor=None):
+        """Split character for nutcracker-style jaw animation"""
+        
+        print(f"\n=== Preparing character for nutcracker animation: {image_path} ===")
+        
+        # Load image
+        img = cv2.imread(image_path, cv2.IMREAD_UNCHANGED)
+        if img is None:
+            raise Exception(f"Could not load image: {image_path}")
+        
+        # Convert to RGBA
+        if len(img.shape) == 3 and img.shape[2] == 3:
+            img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+            alpha = np.ones((img.shape[0], img.shape[1], 1), dtype=img.dtype) * 255
+            img = np.concatenate([img, alpha], axis=2)
+        elif len(img.shape) == 3 and img.shape[2] == 4:
+            img = cv2.cvtColor(img, cv2.COLOR_BGRA2RGBA)
+        
+        height, width = img.shape[:2]
+        print(f"Image dimensions: {width}x{height}")
+        
+        # Extract mouth/jaw region
+        jaw_data = self.extract_mouth_region(img, mouth_anchor)
+        
+        # Create the base face (with mouth area removed)
+        base_face = img.copy()
+        jaw_rect = jaw_data['jaw_rect']
+        
+        # Create a dark cavity where the mouth was
+        cavity_color = [20, 20, 20, 255]  # Dark gray
+        base_face[jaw_rect['y']:jaw_rect['y']+jaw_rect['height'], 
+                  jaw_rect['x']:jaw_rect['x']+jaw_rect['width']] = cavity_color
+        
+        result = {
+            'full_image': img,
+            'base_face': base_face,
+            'jaw_image': jaw_data['jaw_image'],
+            'jaw_rect': jaw_rect,
+            'width': width,
+            'height': height,
+            'mouth_cavity_bounds': {
+                'x': jaw_rect['x'],
+                'y': jaw_rect['y'],
+                'width': jaw_rect['width'],
+                'height': int(jaw_rect['height'] * 1.2)  # Slightly larger for cavity
+            }
+        }
+        
+        print(f"Nutcracker character data created successfully")
+        print(f"Jaw rectangle: x={jaw_rect['x']}, y={jaw_rect['y']}, w={jaw_rect['width']}, h={jaw_rect['height']}")
+        
+        return result
+    
+    def extract_mouth_region(self, image, mouth_anchor=None):
+        """Extract the mouth/jaw region from a face image"""
+        
+        print("Extracting mouth region...")
+        height, width = image.shape[:2]
+        
+        # If manual mouth anchor is provided, use it to calculate mouth region
+        if mouth_anchor is not None:
+            print(f"Using manual mouth anchor: {mouth_anchor}")
+            center_x, center_y = mouth_anchor
+            
+            # Calculate mouth region around the anchor point
+            mouth_width = int(width * 0.3)   # 30% of image width
+            mouth_height = int(height * 0.2) # 20% of image height
+            
+            # Center the region around the anchor point
+            mouth_x = center_x - mouth_width // 2
+            mouth_y = center_y - mouth_height // 2
+            
+            # Ensure bounds are within image
+            mouth_x = max(0, min(mouth_x, width - mouth_width))
+            mouth_y = max(0, min(mouth_y, height - mouth_height))
+            
+            print(f"Manual mouth region: x={mouth_x}, y={mouth_y}, w={mouth_width}, h={mouth_height}")
+        else:
+            # Try to detect face using OpenCV
+            try:
+                # Convert to grayscale for face detection
+                gray = cv2.cvtColor(image, cv2.COLOR_RGBA2GRAY)
+                
+                # Try to load face cascade classifier
+                cascade_path = cv2.data.haarcascades + 'haarcascade_frontalface_default.xml'
+                face_cascade = cv2.CascadeClassifier(cascade_path)
+                
+                # Detect faces
+                faces = face_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5)
+                
+                if len(faces) > 0:
+                    # Use the first detected face
+                    x, y, w, h = faces[0]
+                    print(f"Face detected at: x={x}, y={y}, w={w}, h={h}")
+                    
+                    # Calculate mouth region (lower third of face)
+                    mouth_y = y + int(h * 0.75)  # Start at 75% down the face (was 65%)
+                    mouth_height = int(h * 0.2)  # 20% of face height (was 30%)
+                    mouth_x = x + int(w * 0.35)  # Indent 35% from face edges (was 15%)
+                    mouth_width = int(w * 0.3)   # 30% of face width (was 70%)
+                else:
+                    print("No face detected, using default proportions")
+                    # Use default proportions (lower third of image)
+                    mouth_y = int(height * 0.75)  # Start at 75% down (was 65%)
+                    mouth_height = int(height * 0.2)  # 20% of height (was 25%)
+                    mouth_x = int(width * 0.35)  # Indent 35% from edges (was 20%)
+                    mouth_width = int(width * 0.3)  # 30% of width (was 60%)
+            except Exception as e:
+                print(f"Face detection failed: {e}, using default proportions")
+                # Fallback to default proportions
+                mouth_y = int(height * 0.75)  # Start at 75% down (was 65%)
+                mouth_height = int(height * 0.2)  # 20% of height (was 25%)
+                mouth_x = int(width * 0.35)  # Indent 35% from edges (was 20%)
+                mouth_width = int(width * 0.3)  # 30% of width (was 60%)
+        
+        # Ensure bounds are within image
+        mouth_x = max(0, mouth_x)
+        mouth_y = max(0, mouth_y)
+        mouth_width = min(mouth_width, width - mouth_x)
+        mouth_height = min(mouth_height, height - mouth_y)
+        
+        # Extract jaw region
+        jaw_image = image[mouth_y:mouth_y+mouth_height, mouth_x:mouth_x+mouth_width].copy()
+        
+        # Add smooth edges using alpha gradient
+        edge_size = 3
+        if jaw_image.shape[2] == 4:  # Has alpha channel
+            # Create vertical gradient for top edge
+            for i in range(edge_size):
+                alpha_multiplier = i / edge_size
+                jaw_image[i, :, 3] = (jaw_image[i, :, 3] * alpha_multiplier).astype(np.uint8)
+        
+        print(f"Extracted jaw region: {jaw_image.shape}")
+        
+        return {
+            'jaw_image': jaw_image,
+            'jaw_rect': {
+                'x': mouth_x,
+                'y': mouth_y,
+                'width': mouth_width,
+                'height': mouth_height
+            }
+        }
+    
     def prepare_character_for_sprites(self, image_path, mouth_anchor=None):
         """Prepare character image for sprite-based lip-sync (standard South Park style)"""
         
@@ -440,3 +584,63 @@ class ImageProcessor:
             # Draw filled ellipse
             cv2.ellipse(canvas, (center_x, center_y), (width//2, height//2), 
                        0, 0, 360, cavity_color, -1)
+    
+    def composite_frame_with_jaw_slide(self, character_data, jaw_offset_y, debug=False):
+        """Composite frame using nutcracker jaw vertical sliding"""
+        
+        if debug:
+            print(f"Compositing nutcracker frame with jaw offset: {jaw_offset_y} pixels")
+        
+        # Get canvas dimensions
+        canvas_width = character_data['video_width']
+        canvas_height = character_data['video_height']
+        scale_factor = character_data['scale_factor']
+        padding = character_data['padding']
+        
+        # Create white background canvas
+        frame = np.full((canvas_height, canvas_width, 4), [255, 255, 255, 255], dtype=np.uint8)
+        
+        # Scale the base face
+        base_face_scaled = self.scale_image(character_data['base_face'], scale_factor)
+        jaw_scaled = self.scale_image(character_data['jaw_image'], scale_factor)
+        
+        # Calculate positions
+        char_width_scaled = int(character_data['width'] * scale_factor)
+        char_height_scaled = int(character_data['height'] * scale_factor)
+        
+        base_x = (canvas_width - char_width_scaled) // 2
+        base_y = padding['top']
+        
+        # Place base face
+        self.paste_with_alpha(frame, base_face_scaled, base_x, base_y)
+        
+        # Calculate jaw position
+        jaw_rect = character_data['jaw_rect']
+        jaw_x_scaled = base_x + int(jaw_rect['x'] * scale_factor)
+        jaw_y_scaled = base_y + int(jaw_rect['y'] * scale_factor)
+        
+        # Scale the offset for the current scale factor
+        scaled_offset = int(jaw_offset_y * scale_factor)
+        
+        if jaw_offset_y > 0:
+            # Add white background only behind the actual jaw cutout area
+            jaw_rect = character_data['jaw_rect']
+            cutout_x = base_x + int(jaw_rect['x'] * scale_factor)
+            cutout_y = base_y + int(jaw_rect['y'] * scale_factor)
+            cutout_w = int(jaw_rect['width'] * scale_factor)
+            cutout_h = int(jaw_rect['height'] * scale_factor)
+            
+            # Fill only the exact cutout area with solid white background
+            cv2.rectangle(frame, (cutout_x, cutout_y), 
+                         (cutout_x + cutout_w, cutout_y + cutout_h),
+                         [255, 255, 255, 255], -1)
+            
+
+        
+        # Place jaw at vertically offset position (no rotation)
+        self.paste_with_alpha(frame, jaw_scaled, jaw_x_scaled, jaw_y_scaled + scaled_offset)
+        
+        if debug:
+            print(f"Jaw placed at: ({jaw_x_scaled}, {jaw_y_scaled + scaled_offset}) with offset: {scaled_offset} pixels")
+        
+        return frame
